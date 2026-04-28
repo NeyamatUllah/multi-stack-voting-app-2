@@ -13,7 +13,18 @@ data "aws_ami" "ubuntu" {
   }
 }
 
-# Instance A — Vote + Result + Bastion (public)
+# Bastion — dedicated SSH entry point (public)
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public.id
+  key_name               = var.key_pair_name
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+
+  tags = { Name = "voting-app-bastion" }
+}
+
+# Instance A — Vote + Result (public)
 resource "aws_instance" "instance_a" {
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t3.micro"
@@ -21,7 +32,7 @@ resource "aws_instance" "instance_a" {
   key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.vote_result.id]
 
-  tags = { Name = "voting-app-A-frontend-bastion" }
+  tags = { Name = "voting-app-A-frontend" }
 }
 
 # Instance B — Redis + Worker (private)

@@ -1,4 +1,28 @@
-# Instance A — public-facing (Vote + Result + Bastion)
+# Bastion Host — dedicated SSH entry point
+resource "aws_security_group" "bastion" {
+  name        = "bastion-sg"
+  description = "SSH entry point from internet"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "SSH from internet"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "bastion-sg" }
+}
+
+# Instance A — public-facing (Vote + Result)
 resource "aws_security_group" "vote_result" {
   name        = "vote-result-sg"
   description = "HTTP/HTTPS from internet, SSH bastion entry point"
@@ -21,11 +45,11 @@ resource "aws_security_group" "vote_result" {
   }
 
   ingress {
-    description = "SSH (bastion)"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "SSH from bastion"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
   }
 
   egress {
@@ -57,7 +81,7 @@ resource "aws_security_group" "redis_worker" {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.vote_result.id]
+    security_groups = [aws_security_group.bastion.id]
   }
 
   egress {
@@ -97,7 +121,7 @@ resource "aws_security_group" "postgres" {
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.vote_result.id]
+    security_groups = [aws_security_group.bastion.id]
   }
 
   egress {

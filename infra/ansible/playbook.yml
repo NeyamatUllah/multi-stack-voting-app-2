@@ -1,7 +1,7 @@
 ---
-# Play 1: Install Docker CE on all instances
+# Play 1: Install Docker CE on app instances only (not bastion)
 - name: Install Docker
-  hosts: all
+  hosts: frontend:backend:db
   become: true
   tasks:
     - name: Install prerequisites

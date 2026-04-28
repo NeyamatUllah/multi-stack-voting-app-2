@@ -13,33 +13,43 @@ MARKER_END="# --- end voting-app managed block ---"
 
 # Read IPs from Terraform outputs
 echo "Reading Terraform outputs..."
-PUBLIC_IP=$(terraform -chdir="$TF_DIR" output -raw instance_a_public_ip)
+BASTION_IP=$(terraform -chdir="$TF_DIR" output -raw bastion_public_ip)
+FRONTEND_PUBLIC_IP=$(terraform -chdir="$TF_DIR" output -raw instance_a_public_ip)
+FRONTEND_IP=$(terraform -chdir="$TF_DIR" output -raw instance_a_private_ip)
 BACKEND_IP=$(terraform -chdir="$TF_DIR" output -raw instance_b_private_ip)
 DB_IP=$(terraform -chdir="$TF_DIR" output -raw instance_c_private_ip)
 
-echo "  Instance A (bastion/frontend): $PUBLIC_IP"
-echo "  Instance B (backend):          $BACKEND_IP"
-echo "  Instance C (db):               $DB_IP"
+echo "  Bastion:               $BASTION_IP"
+echo "  Instance A (frontend): $FRONTEND_PUBLIC_IP (public) / $FRONTEND_IP (private)"
+echo "  Instance B (backend):  $BACKEND_IP"
+echo "  Instance C (db):       $DB_IP"
 
 # --- Update ~/.ssh/config ---
 NEW_BLOCK="$MARKER_START
-Host frontend-instance-1
-  HostName $PUBLIC_IP
+Host bastion
+  HostName $BASTION_IP
   User ubuntu
+  IdentityFile $KEY_FILE
+  StrictHostKeyChecking no
+
+Host frontend-instance-1
+  HostName $FRONTEND_IP
+  User ubuntu
+  ProxyJump bastion
   IdentityFile $KEY_FILE
   StrictHostKeyChecking no
 
 Host backend-instance-1
   HostName $BACKEND_IP
   User ubuntu
-  ProxyJump frontend-instance-1
+  ProxyJump bastion
   IdentityFile $KEY_FILE
   StrictHostKeyChecking no
 
 Host db-instance-1
   HostName $DB_IP
   User ubuntu
-  ProxyJump frontend-instance-1
+  ProxyJump bastion
   IdentityFile $KEY_FILE
   StrictHostKeyChecking no
 $MARKER_END"
@@ -77,10 +87,16 @@ EOF
 echo "Ansible group_vars updated."
 echo ""
 echo "Done! New IPs:"
-echo "  Instance A: $PUBLIC_IP (public)"
+echo "  Bastion:    $BASTION_IP (public)"
+echo "  Instance A: $FRONTEND_PUBLIC_IP (public) / $FRONTEND_IP (private)"
 echo "  Instance B: $BACKEND_IP (private)"
 echo "  Instance C: $DB_IP (private)"
 echo ""
-echo "Test SSH: ssh frontend-instance-1"
+echo "App URLs:"
+echo "  Vote:   http://$FRONTEND_PUBLIC_IP:8080"
+echo "  Result: http://$FRONTEND_PUBLIC_IP:8081"
+echo ""
+echo "Test SSH: ssh bastion"
+echo "          ssh frontend-instance-1"
 echo "          ssh backend-instance-1"
 echo "          ssh db-instance-1"
