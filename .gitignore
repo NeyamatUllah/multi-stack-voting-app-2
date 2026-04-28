@@ -1,0 +1,31 @@
+# Terraform - provider binaries (never commit)
+.terraform/
+
+# Terraform - state files (sensitive, keep local or in S3)
+*.tfstate
+*.tfstate.backup
+*.tfplan
+crash.log
+
+# Terraform lock files ARE committed (they pin provider versions)
+# !.terraform.lock.hcl
+
+# .NET build artifacts
+src/worker/bin/
+src/worker/obj/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
