@@ -85,6 +85,14 @@ resource "aws_security_group" "postgres" {
   }
 
   ingress {
+    description     = "Postgres from result app"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.vote_result.id]
+  }
+
+  ingress {
     description     = "SSH from bastion"
     from_port       = 22
     to_port         = 22

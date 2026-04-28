@@ -1,0 +1,5 @@
+redis_host: "10.0.2.171"
+db_host: "10.0.3.130"
+db_username: "postgres"
+db_password: "postgres"
+db_name: "postgres"

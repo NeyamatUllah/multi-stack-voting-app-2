@@ -1,0 +1,168 @@
+---
+# Play 1: Install Docker CE on all instances
+- name: Install Docker
+  hosts: all
+  become: true
+  tasks:
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: true
+
+    - name: Create Docker keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker GPG key
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        creates: /etc/apt/keyrings/docker.gpg
+
+    - name: Set Docker GPG key permissions
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.gpg
+        mode: '0644'
+
+    - name: Add Docker repository
+      ansible.builtin.shell:
+        cmd: echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        creates: /etc/apt/sources.list.d/docker.list
+
+    - name: Install Docker CE
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Start and enable Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ubuntu user to docker group
+      ansible.builtin.user:
+        name: ubuntu
+        groups: docker
+        append: true
+
+# Play 2: PostgreSQL on Instance C
+- name: Deploy PostgreSQL
+  hosts: db
+  become: true
+  tasks:
+    - name: Pull postgres image
+      ansible.builtin.shell: docker pull postgres:15-alpine
+      changed_when: true
+
+    - name: Stop existing postgres container
+      ansible.builtin.shell: docker rm -f postgres 2>/dev/null || true
+      changed_when: true
+
+    - name: Run postgres container
+      ansible.builtin.shell: >
+        docker run -d
+        --name postgres
+        --restart unless-stopped
+        -p 5432:5432
+        -e POSTGRES_USER={{ postgres_user }}
+        -e POSTGRES_PASSWORD={{ postgres_password }}
+        postgres:15-alpine
+      changed_when: true
+
+# Play 3: Redis + Worker on Instance B
+- name: Deploy Redis and Worker
+  hosts: backend
+  become: true
+  tasks:
+    - name: Pull redis image
+      ansible.builtin.shell: docker pull redis:alpine
+      changed_when: true
+
+    - name: Pull worker image
+      ansible.builtin.shell: docker pull neyamat/worker:latest
+      changed_when: true
+
+    - name: Stop existing redis container
+      ansible.builtin.shell: docker rm -f redis 2>/dev/null || true
+      changed_when: true
+
+    - name: Run redis container
+      ansible.builtin.shell: >
+        docker run -d
+        --name redis
+        --restart unless-stopped
+        -p 6379:6379
+        redis:alpine
+      changed_when: true
+
+    - name: Stop existing worker container
+      ansible.builtin.shell: docker rm -f worker 2>/dev/null || true
+      changed_when: true
+
+    - name: Run worker container
+      ansible.builtin.shell: >
+        docker run -d
+        --name worker
+        --restart unless-stopped
+        -e REDIS_HOST={{ redis_host }}
+        -e DB_HOST={{ db_host }}
+        -e DB_USERNAME={{ db_username }}
+        -e DB_PASSWORD={{ db_password }}
+        -e DB_NAME={{ db_name }}
+        neyamat/worker:latest
+      changed_when: true
+
+# Play 4: Vote + Result on Instance A
+- name: Deploy Vote and Result
+  hosts: frontend
+  become: true
+  tasks:
+    - name: Pull vote image
+      ansible.builtin.shell: docker pull neyamat/vote:latest
+      changed_when: true
+
+    - name: Pull result image
+      ansible.builtin.shell: docker pull neyamat/result:latest
+      changed_when: true
+
+    - name: Stop existing vote container
+      ansible.builtin.shell: docker rm -f vote 2>/dev/null || true
+      changed_when: true
+
+    - name: Run vote container
+      ansible.builtin.shell: >
+        docker run -d
+        --name vote
+        --restart unless-stopped
+        -p 8080:80
+        -e REDIS_HOST={{ redis_host }}
+        neyamat/vote:latest
+      changed_when: true
+
+    - name: Stop existing result container
+      ansible.builtin.shell: docker rm -f result 2>/dev/null || true
+      changed_when: true
+
+    - name: Run result container
+      ansible.builtin.shell: >
+        docker run -d
+        --name result
+        --restart unless-stopped
+        -p 8081:80
+        -e PG_HOST={{ pg_host }}
+        -e PG_USER={{ pg_user }}
+        -e PG_PASSWORD={{ pg_password }}
+        -e PG_DATABASE={{ pg_database }}
+        neyamat/result:latest
+      changed_when: true
